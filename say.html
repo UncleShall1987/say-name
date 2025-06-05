@@ -21,28 +21,50 @@
   </style>
 </head>
 <body>
-  <div id="status">🔈 Waiting to speak: <span id="displayName">Unknown</span></div>
-  <button id="btnSpeak">▶️ Speak Now</button>
+  <div id="status">🔈 Loading voices…</div>
+  <button id="btnSpeak" disabled>▶️ Speak Now</button>
 
   <script>
-    // 1) Read the “name” query parameter from the URL
+    // 1) Grab the "name" from URL: ?name=First%20Last
     const params = new URLSearchParams(window.location.search);
     const name = params.get("name") || "Unknown";
 
-    // 2) Update the displayed name immediately
-    document.getElementById("displayName").textContent = name;
+    // 2) Elements
+    const statusEl = document.getElementById("status");
+    const btn = document.getElementById("btnSpeak");
 
-    // 3) When the user clicks “Speak Now,” actually invoke TTS
-    document.getElementById("btnSpeak").addEventListener("click", () => {
-      // Disable button so you can’t double-click
-      document.getElementById("btnSpeak").disabled = true;
-      document.getElementById("status").textContent = "🔈 Speaking: " + name;
+    // 3) Called when voices are loaded
+    function voicesReady() {
+      const voices = speechSynthesis.getVoices() || [];
+      if (voices.length > 0) {
+        // Show the loaded name and enable the button
+        statusEl.textContent = "🔈 Ready to speak: " + name;
+        btn.disabled = false;
+      }
+    }
 
-      // Create the utterance
+    // 4) Listen for the browser’s voiceschanged event
+    speechSynthesis.onvoiceschanged = voicesReady;
+    // ALSO try to load voices immediately (for some browsers)
+    window.addEventListener("DOMContentLoaded", () => {
+      voicesReady();
+    });
+
+    // 5) When the user clicks "Speak Now", fire TTS
+    btn.addEventListener("click", () => {
+      btn.disabled = true; // prevent double‐tap
+      statusEl.textContent = "🔈 Speaking: " + name;
+
       const utter = new SpeechSynthesisUtterance(name);
+
+      // (Optionally) choose a specific voice, rate, or pitch:
+      // const allVoices = speechSynthesis.getVoices();
+      // utter.voice = allVoices.find(v => v.lang.startsWith("en")) || allVoices[0];
+      // utter.rate = 1.0;
+      // utter.pitch = 1.0;
+
       utter.onend = () => {
-        // After it finishes, you could change the status again if you like:
-        // document.getElementById("status").textContent = "🔈 Finished.";
+        statusEl.textContent = "🔈 Done speaking.";
       };
       speechSynthesis.speak(utter);
     });
