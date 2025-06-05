@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8" /><title>Speak Name</title></head>
+<body>
+  <script>
+    const params = new URLSearchParams(window.location.search);
+    const name = params.get("name") || "Unknown";
+    window.addEventListener("DOMContentLoaded", () => {
+      // Display (optional):
+      const info = document.createElement("div");
+      info.style.font = "20px sans-serif";
+      info.textContent = "🔈 Speaking: " + name;
+      document.body.append(info);
+      // Speak:
+      const utter = new SpeechSynthesisUtterance(name);
+      speechSynthesis.speak(utter);
+    });
+  </script>
+</body>
+</html>
