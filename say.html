@@ -1,18 +1,49 @@
 <!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8" /><title>Speak Name</title></head>
+<head>
+  <meta charset="UTF-8" />
+  <title>Speak Name</title>
+  <style>
+    body {
+      font-family: sans-serif;
+      padding: 2rem;
+      text-align: center;
+    }
+    #status {
+      font-size: 1.5rem;
+      margin-bottom: 2rem;
+    }
+    #btnSpeak {
+      font-size: 1.25rem;
+      padding: 0.75rem 1.5rem;
+      cursor: pointer;
+    }
+  </style>
+</head>
 <body>
+  <div id="status">🔈 Waiting to speak: <span id="displayName">Unknown</span></div>
+  <button id="btnSpeak">▶️ Speak Now</button>
+
   <script>
+    // 1) Read the “name” query parameter from the URL
     const params = new URLSearchParams(window.location.search);
     const name = params.get("name") || "Unknown";
-    window.addEventListener("DOMContentLoaded", () => {
-      // Display (optional):
-      const info = document.createElement("div");
-      info.style.font = "20px sans-serif";
-      info.textContent = "🔈 Speaking: " + name;
-      document.body.append(info);
-      // Speak:
+
+    // 2) Update the displayed name immediately
+    document.getElementById("displayName").textContent = name;
+
+    // 3) When the user clicks “Speak Now,” actually invoke TTS
+    document.getElementById("btnSpeak").addEventListener("click", () => {
+      // Disable button so you can’t double-click
+      document.getElementById("btnSpeak").disabled = true;
+      document.getElementById("status").textContent = "🔈 Speaking: " + name;
+
+      // Create the utterance
       const utter = new SpeechSynthesisUtterance(name);
+      utter.onend = () => {
+        // After it finishes, you could change the status again if you like:
+        // document.getElementById("status").textContent = "🔈 Finished.";
+      };
       speechSynthesis.speak(utter);
     });
   </script>
