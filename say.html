@@ -2,17 +2,29 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Scan & Speak QR</title>
+  <title>Scan &amp; Speak QR (Front/Rear)</title>
   <style>
     body {
       font-family: sans-serif;
       margin: 1.5rem;
       text-align: center;
     }
+    h1 {
+      margin-bottom: 1rem;
+    }
+    #buttons {
+      margin-bottom: 1rem;
+    }
+    #buttons button {
+      font-size: 1rem;
+      padding: 0.5rem 1rem;
+      margin: 0 0.5rem;
+      cursor: pointer;
+    }
     #reader {
       width: 100%;
       max-width: 400px;
-      margin: 1rem auto;
+      margin: 0 auto;
       border: 2px solid #666;
       border-radius: 8px;
       overflow: hidden;
@@ -22,96 +34,130 @@
       font-size: 1.25rem;
     }
   </style>
+
   <!-- 1) Load the html5-qrcode library from CDN -->
   <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
 </head>
 <body>
-  <h1>🔍 Scan a QR to Hear the Name 🔈</h1>
+  <h1>🔍 Scan &amp; Speak QR 🔈</h1>
+
+  <!-- 2) Buttons to choose front or rear camera -->
+  <div id="buttons">
+    <button id="btnRear">📷 Rear Camera</button>
+    <button id="btnFront">🤳 Front Camera</button>
+  </div>
+
+  <!-- 3) QR reader container -->
   <div id="reader"></div>
+
   <div id="status">Point your camera at a QR code…</div>
 
   <script>
-    // 2) Once a QR is detected, this callback runs with the decoded text.
+    // Reference to the Html5Qrcode scanner instance
+    let qrScanner = null;
+
+    // Convenience: update status text
+    function setStatus(msg) {
+      document.getElementById("status").textContent = msg;
+    }
+
+    // 4) Called when a QR is successfully decoded
     function onScanSuccess(decodedText, decodedResult) {
-      // Stop further scanning as soon as we get one result:
-      html5QrcodeScanner.clear().catch(error => {
-        console.error("Failed to clear QR scanner:", error);
-      });
+      // 4a) Stop scanning immediately
+      qrScanner
+        .stop()
+        .then(() => {
+          // scanner cleared
+        })
+        .catch(err => {
+          console.warn("Could not stop scanner:", err);
+        });
 
-      // 3) Interpret the decodedText:
-      //    - If your QR contains a full URL with ?name=Foo%20Bar, extract the 'name' param.
-      //    - Otherwise, assume the QR is just the plain name itself.
+      // 4b) Determine what to speak: if it's a URL with ?name=, extract the name
       let nameToSpeak = decodedText;
-
-      // If decodedText looks like a URL and has “?name=”:
       try {
         const url = new URL(decodedText);
-        const maybeName = url.searchParams.get("name");
-        if (maybeName) {
-          // URL‐decode it before speaking:
-          nameToSpeak = maybeName;
+        const candidate = url.searchParams.get("name");
+        if (candidate) {
+          nameToSpeak = candidate;
         }
       } catch (e) {
-        // not a valid URL—just treat decodedText as the name
+        // not a URL—just use decodedText directly
       }
 
-      document.getElementById("status").textContent = "🔈 Speaking: " + nameToSpeak;
-
-      // 4) Use Web Speech API to speak the name:
+      setStatus("🔈 Speaking: " + nameToSpeak);
       const utter = new SpeechSynthesisUtterance(nameToSpeak);
-      // (Optional) You can pick a voice or adjust rate/pitch here:
-      // const voices = speechSynthesis.getVoices();
-      // utter.voice = voices.find(v => v.lang.startsWith("en")) || voices[0];
-      // utter.rate = 1;
-      // utter.pitch = 1;
       speechSynthesis.speak(utter);
 
-      // 5) Optionally, if you want to scan again after speaking is done:
+      // 4c) After speaking finishes, prompt the user to scan again or switch camera
       utter.onend = () => {
-        document.getElementById("status").textContent = "✅ Done speaking. Point again to scan a new QR.";
-        // You can restart the scanner if desired—uncomment below:
-        // html5QrcodeScanner.start(
-        //   { facingMode: "environment" },
-        //   config,
-        //   onScanSuccess,
-        //   onScanFailure
-        // );
+        setStatus("✅ Done speaking. Click a button to scan again.");
       };
     }
 
+    // 5) Called continuously when no QR is found in a frame; we ignore it
     function onScanFailure(errorMessage) {
-      // We can ignore or log scan failures (no valid QR in view)
-      //console.warn(`QR scan failed: ${errorMessage}`);
+      // no-op
     }
 
-    // 6) Create and configure the html5-qrcode scanner:
-    const html5QrcodeScanner = new Html5Qrcode(/* element id = */ "reader");
-    const config = {
-      fps: 10,    // Scans frames per second
-      qrbox: 250  // 250px square scanning region in the middle
-    };
+    // 6) Start the scanner with a given facingMode ("environment" or "user")
+    function startCamera(facingMode) {
+      // If scanner already exists, stop it first
+      if (qrScanner) {
+        qrScanner
+          .stop()
+          .catch(() => {
+            /* ignore failure to stop */
+          })
+          .finally(() => {
+            qrScanner.clear().catch(() => {});
+            createAndStartScanner(facingMode);
+          });
+      } else {
+        createAndStartScanner(facingMode);
+      }
+    }
 
-    // 7) Request camera access and start scanning:
-    Html5Qrcode.getCameras().then(cameras => {
-      if (cameras && cameras.length) {
-        // Use the back camera if available
-        const cameraId = cameras[0].id;
-        html5QrcodeScanner.start(
-          cameraId,
+    // 7) Helper to create a new Html5Qrcode() instance and start scanning
+    function createAndStartScanner(facingMode) {
+      qrScanner = new Html5Qrcode("reader");
+      const config = {
+        fps: 10,        // scan frames per second
+        qrbox: 250,     // 250×250px scanning box
+        experimentalFeatures: {
+          useBarCodeDetectorIfSupported: true
+        }
+      };
+      const constraints = { facingMode: facingMode };
+
+      qrScanner
+        .start(
+          constraints,
           config,
           onScanSuccess,
           onScanFailure
-        ).catch(err => {
-          document.getElementById("status").textContent =
-            "❌ Camera error: " + err;
+        )
+        .then(() => {
+          setStatus("📷 Scanning with “" + (facingMode === "user" ? "Front" : "Rear") + "” camera…");
+        })
+        .catch(err => {
+          setStatus("❌ Error starting camera: " + err);
         });
-      } else {
-        document.getElementById("status").textContent =
-          "❌ No camera found.";
-      }
-    }).catch(err => {
-      document.getElementById("status").textContent =
-        "❌ Could not access cameras: " + err;
+    }
+
+    // 8) Wire up button clicks
+    document.getElementById("btnRear").addEventListener("click", () => {
+      setStatus("🔄 Switching to Rear Camera…");
+      startCamera("environment");
+    });
+    document.getElementById("btnFront").addEventListener("click", () => {
+      setStatus("🔄 Switching to Front Camera…");
+      startCamera("user");
+    });
+
+    // 9) On page load, default to rear camera
+    window.addEventListener("DOMContentLoaded", () => {
+      startCamera("environment");
     });
   </script>
 </body>
